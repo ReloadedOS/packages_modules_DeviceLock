@@ -16,36 +16,80 @@
   -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
     package="com.android.devicelockcontroller">
 
-  <application
-      android:name=".DeviceLockControllerApplication"
-      android:allowBackup="false"
-      android:label="@string/app_name"
-      android:supportsRtl="true">
-      <activity
-          android:name="com.android.devicelockcontroller.activities.HelpActivity"
-          android:theme="@style/Theme.Materialu"
-          android:exported="false" />
-      <service android:name="com.android.devicelockcontroller.DeviceLockControllerService"
-          android:directBootAware="true"
-          android:exported="false" >
-        <intent-filter>
-            <action android:name="android.app.action.DEVICE_LOCK_CONTROLLER_SERVICE" />
-        </intent-filter>
-      </service>
-      <!-- The following component is needed because many Device Policy Manager APIs require
-           this receiver component name as first argument. -->
-      <receiver android:name="com.android.devicelockcontroller.receivers.DlcDeviceAdminReceiver"
-          android:permission="android.permission.BIND_DEVICE_ADMIN"
-          android:exported="true" >
-          <meta-data
-              android:name="android.app.device_admin"
-              android:resource="@xml/device_admin"/>
-          <intent-filter>
-              <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
-          </intent-filter>
-      </receiver>
-  </application>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- TODO: Remove once this permission is part of the role -->
+    <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS"/>
+
+    <application
+        android:name=".DeviceLockControllerApplication"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true">
+        <activity
+            android:name="com.android.devicelockcontroller.activities.HelpActivity"
+            android:theme="@style/Theme.Materialu"
+            android:exported="false"/>
+        <service android:name="com.android.devicelockcontroller.DeviceLockControllerService"
+                 android:directBootAware="true"
+                 android:exported="false"
+                 androidprv:systemUserOnly="true">
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_LOCK_CONTROLLER_SERVICE"/>
+            </intent-filter>
+        </service>
+        <service android:name="com.android.devicelockcontroller.setup.SetupParametersService"
+            android:directBootAware="true"
+            android:exported="false"
+            android:singleUser="true">
+        </service>
+        <service android:name="com.android.devicelockcontroller.setup.UserPreferencesService"
+            android:directBootAware="true"
+            android:exported="false"
+            android:singleUser="true">
+        </service>
+        <!-- The following component is needed because many Device Policy Manager APIs require
+             this receiver component name as first argument. -->
+        <receiver android:name="com.android.devicelockcontroller.receivers.DlcDeviceAdminReceiver"
+                  android:permission="android.permission.BIND_DEVICE_ADMIN"
+                  android:exported="false"
+                  androidprv:systemUserOnly="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin"/>
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
+            </intent-filter>
+        </receiver>
+        <!-- Single user boot completed broadcast receiver -->
+        <receiver android:name="com.android.devicelockcontroller.receivers.CheckInBootCompletedReceiver"
+                  android:exported="false"
+                  android:enabled="false"
+                  androidprv:systemUserOnly="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+        <!-- Multi users boot completed broadcast receiver -->
+        <receiver android:name="com.android.devicelockcontroller.receivers.LockTaskBootCompletedReceiver"
+                  android:exported="false"
+                  android:singleUser="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+        <!-- Multi users locked boot completed broadcast receiver -->
+        <receiver
+            android:name="com.android.devicelockcontroller.receivers.DlcLockedBootCompletedReceiver"
+            android:directBootAware="true"
+            android:exported="false"
+            android:singleUser="false">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
 
 </manifest>

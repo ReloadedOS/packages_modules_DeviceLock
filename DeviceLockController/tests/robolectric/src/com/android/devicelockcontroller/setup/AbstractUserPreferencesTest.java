@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
  * limitations under the License.
  */
 
-package com.android.devicelockcontroller.provision.checkin;
+package com.android.devicelockcontroller.setup;
 
-/**
- * Interface for the DeviceCheckInHelper class.
- */
-public interface DeviceCheckInHelper {
-    /**
-     * Enqueue the DeviceCheckIn work request to WorkManager
-     * @param isExpedited If true, the work request should be expedited.
-     */
-    void enqueueDeviceCheckInWork(boolean isExpedited);
+abstract class AbstractUserPreferencesTest {
+    protected static final String ALLOWLIST_PACKAGE_0 = "allowlist.package.0";
+    protected static final String ALLOWLIST_PACKAGE_1 = "allowlist.package.1";
+    protected static final String PACKAGE_OVERRIDING_HOME = "com.home.package";
 }

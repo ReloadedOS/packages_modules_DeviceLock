@@ -30,10 +30,12 @@ import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.devicelock.DeviceId;
 import android.devicelock.DeviceLockManager;
+import android.os.Build;
 import android.os.OutcomeReceiver;
 import android.telephony.TelephonyManager;
 
 import androidx.concurrent.futures.CallbackToFutureAdapter;
+import androidx.test.filters.SdkSuppress;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.server.devicelock.DeviceLockControllerPackageUtils;
@@ -55,6 +57,7 @@ import java.util.concurrent.TimeoutException;
  * Test system DeviceLockManager APIs.
  */
 @RunWith(JUnit4.class)
+@SdkSuppress(minSdkVersion = Build.VERSION_CODES.UPSIDE_DOWN_CAKE, codeName = "UpsideDownCake")
 public final class DeviceLockManagerTest {
     private final ExecutorService mExecutorService = Executors.newCachedThreadPool();
 

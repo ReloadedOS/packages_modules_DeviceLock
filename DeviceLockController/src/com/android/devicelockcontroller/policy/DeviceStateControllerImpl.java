@@ -28,11 +28,10 @@ import java.util.Locale;
  * State machine for device lock controller.
  */
 public final class DeviceStateControllerImpl implements DeviceStateController {
-    private int mState;
+    private static final String TAG = "DeviceStateControllerImpl";
     private final Context mContext;
     private final ArrayList<StateListener> mListeners = new ArrayList<>();
-
-    private static final String TAG = "DeviceStateControllerImpl";
+    private int mState;
 
     /**
      * Create a new state machine.
@@ -68,6 +67,19 @@ public final class DeviceStateControllerImpl implements DeviceStateController {
                 || mState == DeviceState.SETUP_FAILED
                 || mState == DeviceState.KIOSK_SETUP
                 || mState == DeviceState.LOCKED;
+    }
+
+    @Override
+    public boolean isCheckInNeeded() {
+        // TODO: Persist the isCheckInNeeded state into storage to prevent unnecessary check-ins.
+        return mState == DeviceState.UNPROVISIONED;
+    }
+
+    @Override
+    public boolean isInSetupState() {
+        return mState == DeviceState.SETUP_IN_PROGRESS
+                || mState == DeviceState.SETUP_SUCCEEDED
+                || mState == DeviceState.SETUP_FAILED;
     }
 
     @Override
