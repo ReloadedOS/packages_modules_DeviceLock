@@ -25,9 +25,10 @@ import java.lang.annotation.RetentionPolicy;
 public final class DeviceLockConstants {
     // TODO: properly set to an activity. Additionally, package could be com.android... or
     // com.google.android... and should be determined dynamically.
-    public static final String SETUP_FAILED_ACTIVITY =
+    public static final String PROVISIONING_ACTIVITY =
             "com.android.devicelockcontroller/"
-                    + "com.android.devicelockcontroller.SetupFailedActivity";
+                    + "com.android.devicelockcontroller.activities.ProvisioningActivity";
+    public static final String KEY_KIOSK_APP_INSTALLED = "devicelock_kiosk_app_installed";
 
     // Constants related to unique device identifiers.
     @Retention(RetentionPolicy.SOURCE)
@@ -51,15 +52,15 @@ public final class DeviceLockConstants {
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(value = {
             STATUS_UNSPECIFIED,
-            READY_FOR_PROVISION,
             RETRY_CHECK_IN,
+            READY_FOR_PROVISION,
             STOP_CHECK_IN,
     })
     public @interface DeviceCheckInStatus {}
 
     public static final int STATUS_UNSPECIFIED = 0;
-    public static final int READY_FOR_PROVISION = 1;
-    public static final int RETRY_CHECK_IN = 2;
+    public static final int RETRY_CHECK_IN = 1;
+    public static final int READY_FOR_PROVISION = 2;
     public static final int STOP_CHECK_IN = 3;
 
     @Retention(RetentionPolicy.SOURCE)
@@ -126,6 +127,12 @@ public final class DeviceLockConstants {
 
     public static final String ACTION_START_DEVICE_FINANCING_DEFERRED_PROVISIONING =
             "com.android.devicelockcontroller.action.START_DEVICE_FINANCING_DEFERRED_PROVISIONING";
+
+    public static final String ACTION_START_DEVICE_SUBSIDY_PROVISIONING =
+            "com.android.devicelockcontroller.action.START_DEVICE_SUBSIDY_PROVISIONING";
+
+    public static final String ACTION_START_DEVICE_SUBSIDY_DEFERRED_PROVISIONING =
+            "com.android.devicelockcontroller.action.START_DEVICE_SUBSIDY_DEFERRED_PROVISIONING";
 
     /** Restrict instantiation. */
     private DeviceLockConstants() {}
