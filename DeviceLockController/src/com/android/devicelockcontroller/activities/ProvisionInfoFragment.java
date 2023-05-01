@@ -16,10 +16,19 @@
 
 package com.android.devicelockcontroller.activities;
 
+import static com.android.devicelockcontroller.common.DeviceLockConstants.ACTION_START_DEVICE_FINANCING_DEFERRED_PROVISIONING;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.ACTION_START_DEVICE_FINANCING_PROVISIONING;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.ACTION_START_DEVICE_FINANCING_SECONDARY_USER_PROVISIONING;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.ACTION_START_DEVICE_SUBSIDY_DEFERRED_PROVISIONING;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.ACTION_START_DEVICE_SUBSIDY_PROVISIONING;
+
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -28,11 +37,17 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.devicelockcontroller.R;
+import com.android.devicelockcontroller.setup.SetupParameters;
+import com.android.devicelockcontroller.util.LogUtil;
+
+import java.util.Objects;
 
 /**
  * The screen that provides information about the provision.
  */
 public final class ProvisionInfoFragment extends Fragment {
+
+    private static final String TAG = "ProvisionInfoFragment";
 
     @Nullable
     @Override
@@ -46,13 +61,70 @@ public final class ProvisionInfoFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        RecyclerView recyclerView = view.findViewById(R.id.recyclerview_provision_info);
-        ProvisionInfoListAdapter adapter = new ProvisionInfoListAdapter();
+        String providerName = SetupParameters.getKioskAppProviderName(getActivity());
+        if (TextUtils.isEmpty(providerName)) {
+            LogUtil.e(TAG, "Device provider name is empty, should not reach here.");
+            return;
+        }
 
-        ProvisionInfoViewModel viewModel = new ViewModelProvider(this).get(
-                ProvisionInfoViewModel.class);
-        viewModel.getProvisionInfoListLiveData().observe(getViewLifecycleOwner(),
+        ProvisionInfoViewModel viewModel;
+        switch (Objects.requireNonNull(getActivity()).getIntent().getAction()) {
+            case ACTION_START_DEVICE_FINANCING_PROVISIONING:
+                viewModel = new ViewModelProvider(this).get(
+                        DeviceFinancingProvisionInfoViewModel.class);
+                break;
+            case ACTION_START_DEVICE_FINANCING_DEFERRED_PROVISIONING:
+                viewModel = new ViewModelProvider(this).get(
+                        DeviceFinancingDeferredProvisionInfoViewModel.class);
+                break;
+            case ACTION_START_DEVICE_FINANCING_SECONDARY_USER_PROVISIONING:
+                viewModel = new ViewModelProvider(this).get(
+                        DeviceFinancingSecondaryUserProvisionInfoViewModel.class);
+                break;
+            case ACTION_START_DEVICE_SUBSIDY_PROVISIONING:
+                viewModel = new ViewModelProvider(this).get(
+                        DeviceSubsidyProvisionInfoViewModel.class);
+                break;
+            case ACTION_START_DEVICE_SUBSIDY_DEFERRED_PROVISIONING:
+                viewModel = new ViewModelProvider(this).get(
+                        DeviceSubsidyDeferredProvisionInfoViewModel.class);
+                break;
+            default:
+                LogUtil.e(TAG, "Unknown action is received, exiting");
+                return;
+        }
+
+        RecyclerView recyclerView = view.findViewById(R.id.recyclerview_provision_info);
+        if (recyclerView == null) {
+            LogUtil.e(TAG, "Could not find provision info RecyclerView, should not reach here.");
+            return;
+        }
+        ProvisionInfoListAdapter adapter = new ProvisionInfoListAdapter();
+        viewModel.mProvisionInfoListLiveData.observe(getViewLifecycleOwner(),
                 adapter::submitList);
         recyclerView.setAdapter(adapter);
+        ImageView imageView = view.findViewById(R.id.header_icon);
+        if (imageView == null) {
+            LogUtil.e(TAG, "Could not find header ImageView, should not reach here.");
+            return;
+        }
+        viewModel.mHeaderDrawableIdLiveData.observe(getViewLifecycleOwner(),
+                imageView::setImageResource);
+
+        TextView headerTextView = view.findViewById(R.id.header_text);
+        if (headerTextView == null) {
+            LogUtil.e(TAG, "Could not find header TextView, should not reach here.");
+            return;
+        }
+        viewModel.mHeaderTextIdLiveData.observe(getViewLifecycleOwner(),
+                id -> headerTextView.setText(getString(id, providerName)));
+
+        TextView subheaderTextView = view.findViewById(R.id.subheader_text);
+        if (subheaderTextView == null) {
+            LogUtil.e(TAG, "Could not find subheader TextView, should not reach here.");
+            return;
+        }
+        viewModel.mSubheaderTextIdLiveData.observe(getViewLifecycleOwner(),
+                id -> subheaderTextView.setText(getString(id, providerName)));
     }
 }
