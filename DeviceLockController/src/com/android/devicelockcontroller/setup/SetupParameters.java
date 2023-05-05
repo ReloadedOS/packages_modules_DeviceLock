@@ -27,10 +27,12 @@ import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_SIGNATURE_CHECKSUM;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_MANDATORY_PROVISION;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_PROVISIONING_TYPE;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_TERMS_AND_CONDITIONS_URL;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.TYPE_UNDEFINED;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.ArraySet;
 
@@ -64,6 +66,8 @@ final class SetupParameters {
     private static final String KEY_KIOSK_APP_PROVIDER_NAME = "kiosk-app-provider-name";
     private static final String KEY_DISALLOW_INSTALLING_FROM_UNKNOWN_SOURCES =
             "disallow-installing-from-unknown-sources";
+    private static final String KEY_TERMS_AND_CONDITIONS_URL =
+            "terms-and-conditions-url";
 
     private SetupParameters() {
     }
@@ -71,6 +75,16 @@ final class SetupParameters {
     private static SharedPreferences getSharedPreferences(Context context) {
         Context deviceContext = context.createDeviceProtectedStorageContext();
         return deviceContext.getSharedPreferences(FILENAME, Context.MODE_PRIVATE);
+    }
+
+    // Note that this API is only used for debugging purpose and should only be called in
+    // debuggable build.
+    static synchronized void overridePrefs(Context context, Bundle bundle) {
+        if (!Build.isDebuggable()) {
+            throw new SecurityException(
+                    "Setup parameters is not allowed to be override in non-debuggable build!");
+        }
+        populatePreferencesLocked(getSharedPreferences(context), bundle);
     }
 
     /**
@@ -110,6 +124,8 @@ final class SetupParameters {
                 bundle.getString(EXTRA_KIOSK_APP_PROVIDER_NAME));
         editor.putBoolean(KEY_DISALLOW_INSTALLING_FROM_UNKNOWN_SOURCES,
                 bundle.getBoolean(EXTRA_DISALLOW_INSTALLING_FROM_UNKNOWN_SOURCES));
+        editor.putString(KEY_TERMS_AND_CONDITIONS_URL,
+                bundle.getString(EXTRA_TERMS_AND_CONDITIONS_URL));
         editor.apply();
     }
 
@@ -239,12 +255,15 @@ final class SetupParameters {
     }
 
     /**
-     * Override the device provider name using the given string.
-     * Note: this API is used for testing purpose only.
+     * Get the URL to the terms and conditions of the partner for enrolling in a Device Lock
+     * program.
+     *
+     * @param context Context used to get the shared preferences.
+     * @return The URL to the terms and conditions.
      */
-    static void overrideDeviceProviderName(Context context, String name) {
-        SharedPreferences.Editor editor = getSharedPreferences(context).edit();
-        editor.putString(KEY_KIOSK_APP_PROVIDER_NAME, name);
-        editor.apply();
+    @Nullable
+    static String getTermsAndConditionsUrl(Context context) {
+        return getSharedPreferences(context).getString(
+                KEY_TERMS_AND_CONDITIONS_URL, /* defValue= */ null);
     }
 }

@@ -20,28 +20,17 @@ import android.os.Bundle;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.fragment.app.Fragment;
 
 import com.android.devicelockcontroller.R;
 
 /**
- * The first activity displayed during the provisioning flow.
+ * A screen that tells the user their device will be enrolled.
  */
-public final class LandingActivity extends AppCompatActivity {
+public final class DeviceEnrollmentActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.landing_activity);
-
-        if (savedInstanceState == null) {
-            // TODO(b/279849085): show the ProvisionNotRequiredFragment instead if users pay their
-            //  devices before device enrollment
-            Fragment fragment = new ProvisionInfoFragment();
-            getSupportFragmentManager()
-                    .beginTransaction()
-                    .add(R.id.fragment_container, fragment)
-                    .commit();
-        }
+        setContentView(R.layout.activity_device_enrollment);
     }
 }
