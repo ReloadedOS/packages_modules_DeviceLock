@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.devicelockcontroller.setup;
+package com.android.devicelockcontroller.storage;
 
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_DISALLOW_INSTALLING_FROM_UNKNOWN_SOURCES;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_ALLOWLIST;
@@ -27,8 +27,9 @@ import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_SIGNATURE_CHECKSUM;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_MANDATORY_PROVISION;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_PROVISIONING_TYPE;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_SUPPORT_URL;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_TERMS_AND_CONDITIONS_URL;
-import static com.android.devicelockcontroller.common.DeviceLockConstants.TYPE_UNDEFINED;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.ProvisioningType.TYPE_UNDEFINED;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -46,7 +47,13 @@ import com.google.common.collect.ImmutableList;
 import java.util.Set;
 
 /**
- * Store provisioning parameters
+ * Stores setup parameters.
+ * <p>
+ * Note that these parameters are created by the system user at the setup time and must not be
+ * written afterwards.
+ * <p>
+ * Also, these parameters are accessed globally by all users and must be accessed all the time via
+ * the {@link SetupParametersClient}.
  */
 final class SetupParameters {
     private static final String TAG = "SetupParameters";
@@ -68,6 +75,7 @@ final class SetupParameters {
             "disallow-installing-from-unknown-sources";
     private static final String KEY_TERMS_AND_CONDITIONS_URL =
             "terms-and-conditions-url";
+    private static final String KEY_SUPPORT_URL = "support-url";
 
     private SetupParameters() {
     }
@@ -126,6 +134,7 @@ final class SetupParameters {
                 bundle.getBoolean(EXTRA_DISALLOW_INSTALLING_FROM_UNKNOWN_SOURCES));
         editor.putString(KEY_TERMS_AND_CONDITIONS_URL,
                 bundle.getString(EXTRA_TERMS_AND_CONDITIONS_URL));
+        editor.putString(KEY_SUPPORT_URL, bundle.getString(EXTRA_SUPPORT_URL));
         editor.apply();
     }
 
@@ -265,5 +274,17 @@ final class SetupParameters {
     static String getTermsAndConditionsUrl(Context context) {
         return getSharedPreferences(context).getString(
                 KEY_TERMS_AND_CONDITIONS_URL, /* defValue= */ null);
+    }
+
+    /**
+     * The URL to the support page the user can use to get help.
+     *
+     * @param context Context used to get the shared preferences.
+     * @return The URL to the support page.
+     */
+    @Nullable
+    static String getSupportUrl(Context context) {
+        return getSharedPreferences(context).getString(
+                KEY_SUPPORT_URL, /* defValue= */ null);
     }
 }
