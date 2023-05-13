@@ -16,11 +16,14 @@
 
 package com.android.devicelockcontroller.activities;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -31,13 +34,15 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.devicelockcontroller.R;
-import com.android.devicelockcontroller.setup.SetupParameters;
+import com.android.devicelockcontroller.setup.SetupParametersClient;
 import com.android.devicelockcontroller.util.LogUtil;
+
+import com.google.common.util.concurrent.Futures;
 
 /**
  * A screen which lists the polies enforced on the device by the device provider.
  */
-public class DevicePoliciesFragment extends Fragment {
+public final class DevicePoliciesFragment extends Fragment {
 
     private static final String TAG = "DevicePoliciesFragment";
 
@@ -53,7 +58,8 @@ public class DevicePoliciesFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        String providerName = SetupParameters.getKioskAppProviderName(getActivity());
+        String providerName = Futures.getUnchecked(
+                SetupParametersClient.getInstance().getKioskAppProviderName());
         if (TextUtils.isEmpty(providerName)) {
             LogUtil.e(TAG, "Device provider name is empty, should not reach here.");
             return;
@@ -68,27 +74,27 @@ public class DevicePoliciesFragment extends Fragment {
         recyclerView.setAdapter(adapter);
 
         ImageView imageView = view.findViewById(R.id.header_icon);
-        if (imageView == null) {
-            LogUtil.e(TAG, "Could not find header ImageView, should not reach here.");
-            return;
-        }
+        checkNotNull(imageView);
         viewModel.mHeaderDrawableIdLiveData.observe(getViewLifecycleOwner(),
                 imageView::setImageResource);
 
         TextView headerTextView = view.findViewById(R.id.header_text);
-        if (headerTextView == null) {
-            LogUtil.e(TAG, "Could not find header TextView, should not reach here.");
-            return;
-        }
+        checkNotNull(headerTextView);
         viewModel.mHeaderTextIdLiveData.observe(getViewLifecycleOwner(),
                 id -> headerTextView.setText(getString(id, providerName)));
 
         TextView footerTextView = view.findViewById(R.id.footer_text);
-        if (footerTextView == null) {
-            LogUtil.e(TAG, "Could not find footer TextView, should not reach here.");
-            return;
-        }
+        checkNotNull(footerTextView);
         viewModel.mFooterTextIdLiveData.observe(getViewLifecycleOwner(),
                 id -> footerTextView.setText(getText(id)));
+
+        ProvisioningProgressViewModel provisioningProgressViewModel =
+                new ViewModelProvider(requireActivity()).get(ProvisioningProgressViewModel.class);
+        Button button = view.findViewById(R.id.button_next);
+        checkNotNull(button);
+        button.setOnClickListener(
+                v -> provisioningProgressViewModel
+                        .getProvisioningProgressMutableLiveData()
+                        .setValue(ProvisioningProgress.GETTING_DEVICE_READY));
     }
 }
