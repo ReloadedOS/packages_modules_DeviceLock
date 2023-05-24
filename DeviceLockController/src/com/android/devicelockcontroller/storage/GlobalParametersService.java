@@ -36,6 +36,10 @@ public final class GlobalParametersService extends Service {
 
     private final IGlobalParametersService.Stub mBinder =
             new IGlobalParametersService.Stub() {
+                @Override
+                public void clear() {
+                    GlobalParameters.clear(mContext);
+                }
 
                 @Override
                 public List<String> getLockTaskAllowlist() {
@@ -85,6 +89,16 @@ public final class GlobalParametersService extends Service {
                 @Override
                 public void setEnrollmentToken(String token) {
                     GlobalParameters.setEnrollmentToken(mContext, token);
+                }
+
+                @Override
+                public String getKioskSignature() {
+                    return GlobalParameters.getKioskSignature(mContext);
+                }
+
+                @Override
+                public void setKioskSignature(String kioskSignature) {
+                    GlobalParameters.setKioskSignature(mContext, kioskSignature);
                 }
             };
 
