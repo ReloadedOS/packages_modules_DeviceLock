@@ -24,6 +24,11 @@ import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_PACKAGE;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_SIGNATURE_CHECKSUM;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.KEY_KIOSK_APP_INSTALLED;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.SetupFailureReason.DELETE_PACKAGE_FAILED;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.SetupFailureReason.DOWNLOAD_FAILED;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.SetupFailureReason.INSTALL_EXISTING_FAILED;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.SetupFailureReason.INSTALL_FAILED;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.SetupFailureReason.VERIFICATION_FAILED;
 import static com.android.devicelockcontroller.policy.AbstractTask.ERROR_CODE_CREATE_LOCAL_FILE_FAILED;
 import static com.android.devicelockcontroller.policy.AbstractTask.ERROR_CODE_DELETE_APK_FAILED;
 import static com.android.devicelockcontroller.policy.AbstractTask.ERROR_CODE_EMPTY_DOWNLOAD_URL;
@@ -33,13 +38,9 @@ import static com.android.devicelockcontroller.policy.AbstractTask.ERROR_CODE_NO
 import static com.android.devicelockcontroller.policy.AbstractTask.ERROR_CODE_PACKAGE_HAS_MULTIPLE_SIGNERS;
 import static com.android.devicelockcontroller.policy.AbstractTask.ERROR_CODE_TOO_MANY_REDIRECTS;
 import static com.android.devicelockcontroller.policy.AbstractTask.TASK_RESULT_ERROR_CODE_KEY;
-import static com.android.devicelockcontroller.policy.SetupController.SetupUpdatesCallbacks.FailureType.DELETE_PACKAGE_FAILED;
-import static com.android.devicelockcontroller.policy.SetupController.SetupUpdatesCallbacks.FailureType.DOWNLOAD_FAILED;
-import static com.android.devicelockcontroller.policy.SetupController.SetupUpdatesCallbacks.FailureType.INSTALL_EXISTING_FAILED;
-import static com.android.devicelockcontroller.policy.SetupController.SetupUpdatesCallbacks.FailureType.INSTALL_FAILED;
-import static com.android.devicelockcontroller.policy.SetupController.SetupUpdatesCallbacks.FailureType.VERIFICATION_FAILED;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Build;
 
@@ -57,9 +58,9 @@ import androidx.work.WorkInfo.State;
 import androidx.work.WorkManager;
 
 import com.android.devicelockcontroller.DeviceLockControllerApplication;
+import com.android.devicelockcontroller.common.DeviceLockConstants.SetupFailureReason;
 import com.android.devicelockcontroller.policy.DeviceStateController.DeviceEvent;
 import com.android.devicelockcontroller.policy.DeviceStateController.DeviceState;
-import com.android.devicelockcontroller.policy.SetupController.SetupUpdatesCallbacks.FailureType;
 import com.android.devicelockcontroller.storage.SetupParametersClient;
 import com.android.devicelockcontroller.util.LogUtil;
 
@@ -78,8 +79,8 @@ public final class SetupControllerImpl implements SetupController {
     private static final String SETUP_URL_INSTALL_TASKS_NAME = "devicelock_setup_url_install_tasks";
     private static final String SETUP_PLAY_INSTALL_TASKS_NAME =
             "devicelock_setup_play_install_tasks";
-    public static final String SETUP_VERIFY_PRE_INSTALLED_PACKAGE_TASK =
-            "devicelock_setup_verify_pre_installed_package_task";
+    public static final String SETUP_PRE_INSTALLED_PACKAGE_TASK =
+            "devicelock_setup_pre_installed_package_task";
     public static final String TAG = "SetupController";
     public static final String SETUP_INSTALL_EXISTING_PACKAGE_TASK =
             "devicelock_setup_install_existing_package_task";
@@ -139,7 +140,7 @@ public final class SetupControllerImpl implements SetupController {
         return Futures.transformAsync(isKioskAppPreInstalled(),
                 isPreinstalled -> {
                     if (isPreinstalled) {
-                        return verifyPreInstalledPackage(workManager, owner);
+                        return assignRoleToPreinstalledPackage(workManager, owner);
                     } else if (mContext.getUser().isSystem()) {
                         final Class<? extends ListenableWorker> playInstallTaskClass =
                                 ((DeviceLockControllerApplication) mContext.getApplicationContext())
@@ -156,19 +157,22 @@ public final class SetupControllerImpl implements SetupController {
                 }, MoreExecutors.directExecutor());
     }
 
-    private ListenableFuture<Boolean> isKioskAppPreInstalled() {
-        return Futures.transform(SetupParametersClient.getInstance().getKioskPackage(),
-                packageName -> {
-                    try {
-                        mContext.getPackageManager().getPackageInfo(
-                                packageName, /* flags= */ 0);
-                        LogUtil.i(TAG, "Creditor app is pre-installed");
-                        return true;
-                    } catch (NameNotFoundException e) {
-                        LogUtil.i(TAG, "Creditor app is not pre-installed");
-                        return false;
-                    }
-                }, MoreExecutors.directExecutor());
+    @VisibleForTesting
+    ListenableFuture<Boolean> isKioskAppPreInstalled() {
+        return !Build.isDebuggable() ? Futures.immediateFuture(false)
+                : Futures.transform(SetupParametersClient.getInstance().getKioskPackage(),
+                        packageName -> {
+                            try {
+                                mContext.getPackageManager().getPackageInfo(
+                                        packageName,
+                                        ApplicationInfo.FLAG_INSTALLED);
+                                LogUtil.i(TAG, "Creditor app is pre-installed");
+                                return true;
+                            } catch (NameNotFoundException e) {
+                                LogUtil.i(TAG, "Creditor app is not pre-installed");
+                                return false;
+                            }
+                        }, MoreExecutors.directExecutor());
     }
 
     @VisibleForTesting
@@ -256,32 +260,20 @@ public final class SetupControllerImpl implements SetupController {
     }
 
     @VisibleForTesting
-    ListenableFuture<Void> verifyPreInstalledPackage(WorkManager workManager,
+    ListenableFuture<Void> assignRoleToPreinstalledPackage(WorkManager workManager,
             LifecycleOwner owner) {
 
         final SetupParametersClient setupParametersClient = SetupParametersClient.getInstance();
         final ListenableFuture<String> getKioskPackageTask =
                 setupParametersClient.getKioskPackage();
-        final ListenableFuture<String> getKioskSignatureChecksumTask =
-                setupParametersClient.getKioskSignatureChecksum();
-        return Futures.whenAllSucceed(getKioskPackageTask, getKioskSignatureChecksumTask)
-                .call(() -> {
-                    LogUtil.v(TAG, "Verifying pre-installed package");
-                    String kioskPackageName = Futures.getDone(getKioskPackageTask);
-                    OneTimeWorkRequest verifyInstallPackageTask =
-                            getVerifyInstalledPackageTask(kioskPackageName,
-                                    Futures.getDone(getKioskSignatureChecksumTask));
+        return Futures.transform(getKioskPackageTask,
+                kioskPackage -> {
+                    LogUtil.v(TAG, "assigning role to pre-installed package");
                     OneTimeWorkRequest addFinancedDeviceKioskRoleTask =
-                            getAddFinancedDeviceKioskRoleTask(kioskPackageName);
-                    if (!Build.isDebuggable()) {
-                        createAndRunTasks(workManager, owner,
-                                SETUP_VERIFY_PRE_INSTALLED_PACKAGE_TASK,
-                                verifyInstallPackageTask, addFinancedDeviceKioskRoleTask);
-                    } else {
-                        createAndRunTasks(workManager, owner,
-                                SETUP_VERIFY_PRE_INSTALLED_PACKAGE_TASK,
-                                addFinancedDeviceKioskRoleTask);
-                    }
+                            getAddFinancedDeviceKioskRoleTask(kioskPackage);
+                    createAndRunTasks(workManager, owner,
+                            SETUP_PRE_INSTALLED_PACKAGE_TASK,
+                            addFinancedDeviceKioskRoleTask);
                     return null;
                 }, mContext.getMainExecutor());
     }
@@ -371,45 +363,35 @@ public final class SetupControllerImpl implements SetupController {
     }
 
     @VisibleForTesting
-    void finishSetup() {
+    ListenableFuture<Void> finishSetup() {
         if (mCurrentSetupState == SetupStatus.SETUP_FINISHED) {
-            Futures.addCallback(mPolicyController.launchActivityInLockedMode(),
-                    new FutureCallback<>() {
-                        @Override
-                        public void onSuccess(Boolean isLaunched) {
-                            if (!isLaunched) {
-                                onFailure(new IllegalStateException());
-                            }
-                            LogUtil.i(TAG, "Launched kiosk activity in lock task mode");
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            LogUtil.e(TAG, "Failed to launch kiosk activity in lock task mode!", t);
-                        }
-                    }, MoreExecutors.directExecutor());
+            return Futures.transformAsync(mStateController.setNextStateForEvent(
+                            DeviceEvent.SETUP_COMPLETE),
+                    empty -> Futures.transform(mPolicyController.launchActivityInLockedMode(),
+                            isLaunched -> {
+                                if (!isLaunched) {
+                                    throw new IllegalStateException(
+                                            "Launching kiosk setup activity failed!");
+                                }
+                                return null;
+                            }, MoreExecutors.directExecutor()), MoreExecutors.directExecutor());
         } else {
-            Futures.addCallback(SetupParametersClient.getInstance().isProvisionMandatory(),
-                    new FutureCallback<>() {
-                        @Override
-                        public void onSuccess(Boolean isMandatory) {
-                            if (isMandatory) mPolicyController.wipeData();
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            LogUtil.e(TAG, "Failed to know if Provision is mandatory", t);
-                        }
+            return Futures.transform(
+                    SetupParametersClient.getInstance().isProvisionMandatory(),
+                    isMandatory -> {
+                        if (isMandatory) mPolicyController.wipeData();
+                        return null;
                     }, MoreExecutors.directExecutor());
         }
     }
 
-    private void setupFlowTaskSuccessCallbackHandler() {
-        setupFlowTaskCallbackHandler(true, /* Ignored parameter */ FailureType.SETUP_FAILED);
+    @VisibleForTesting
+    void setupFlowTaskSuccessCallbackHandler() {
+        setupFlowTaskCallbackHandler(true, /* Ignored parameter */ SetupFailureReason.SETUP_FAILED);
     }
 
-    private void setupFlowTaskFailureCallbackHandler(
-            @FailureType int failReason) {
+    @VisibleForTesting
+    void setupFlowTaskFailureCallbackHandler(@SetupFailureReason int failReason) {
         setupFlowTaskCallbackHandler(false, failReason);
     }
 
@@ -419,44 +401,48 @@ public final class SetupControllerImpl implements SetupController {
      * @param result     true if the setup succeed, otherwise false
      * @param failReason why the setup failed, the value will be ignored if {@code result} is true
      */
-    @VisibleForTesting
-    void setupFlowTaskCallbackHandler(
-            boolean result, @FailureType int failReason) {
+    private void setupFlowTaskCallbackHandler(
+            boolean result, @SetupFailureReason int failReason) {
+        Futures.addCallback(
+                Futures.transformAsync(mStateController.setNextStateForEvent(
+                                result ? DeviceEvent.SETUP_SUCCESS : DeviceEvent.SETUP_FAILURE),
+                        input -> {
+                            if (result) {
+                                LogUtil.i(TAG, "Handling successful setup");
+                                mCurrentSetupState = SetupStatus.SETUP_FINISHED;
+                                synchronized (mCallbacks) {
+                                    for (int i = 0, cbSize = mCallbacks.size(); i < cbSize; i++) {
+                                        mCallbacks.get(i).setupCompleted();
+                                    }
+                                }
+                            } else {
+                                LogUtil.i(TAG, "Handling failed setup");
+                                mCurrentSetupState = SetupStatus.SETUP_FAILED;
+                                synchronized (mCallbacks) {
+                                    for (int i = 0, cbSize = mCallbacks.size(); i < cbSize; i++) {
+                                        mCallbacks.get(i).setupFailed(failReason);
+                                    }
+                                }
+                            }
+                            return finishSetup();
+                        }, MoreExecutors.directExecutor()),
+                new FutureCallback<>() {
+                    @Override
+                    public void onSuccess(Void result) {
+                        LogUtil.v(TAG, "Successfully handled setup callbacks");
+                    }
 
-        try {
-            mStateController.setNextStateForEvent(
-                    result ? DeviceEvent.SETUP_SUCCESS : DeviceEvent.SETUP_FAILURE);
-        } catch (StateTransitionException e) {
-            LogUtil.e(TAG, "Device state inconsistent, aborting setup", e);
-            result = false;
-            failReason = FailureType.SETUP_FAILED;
-        }
-
-
-        if (result) {
-            LogUtil.i(TAG, "Handling successful setup");
-            mCurrentSetupState = SetupStatus.SETUP_FINISHED;
-            synchronized (mCallbacks) {
-                for (int i = 0, cbSize = mCallbacks.size(); i < cbSize; i++) {
-                    mCallbacks.get(i).setupCompleted();
-                }
-            }
-        } else {
-            LogUtil.i(TAG, "Handling failed setup");
-            mCurrentSetupState = SetupStatus.SETUP_FAILED;
-            synchronized (mCallbacks) {
-                for (int i = 0, cbSize = mCallbacks.size(); i < cbSize; i++) {
-                    mCallbacks.get(i).setupFailed(failReason);
-                }
-            }
-        }
-        finishSetup();
+                    @Override
+                    public void onFailure(Throwable t) {
+                        LogUtil.e(TAG, "Failed to handle setup callbacks!", t);
+                    }
+                }, MoreExecutors.directExecutor());
     }
 
     @VisibleForTesting
-    @FailureType
+    @SetupFailureReason
     static int transformErrorCodeToFailureType(@AbstractTask.ErrorCode int errorCode) {
-        int failReason = FailureType.SETUP_FAILED;
+        int failReason = SetupFailureReason.SETUP_FAILED;
         if (errorCode <= ERROR_CODE_TOO_MANY_REDIRECTS
                 && errorCode >= ERROR_CODE_EMPTY_DOWNLOAD_URL) {
             failReason = DOWNLOAD_FAILED;
@@ -493,7 +479,7 @@ public final class SetupControllerImpl implements SetupController {
         return false;
     }
 
-    @FailureType
+    @SetupFailureReason
     private static int getTaskFailureType(List<WorkInfo> workInfoList) {
         for (WorkInfo workInfo : workInfoList) {
             int errorCode = workInfo.getOutputData().getInt(TASK_RESULT_ERROR_CODE_KEY, -1);
@@ -501,6 +487,6 @@ public final class SetupControllerImpl implements SetupController {
                 return transformErrorCodeToFailureType(errorCode);
             }
         }
-        return FailureType.SETUP_FAILED;
+        return SetupFailureReason.SETUP_FAILED;
     }
 }

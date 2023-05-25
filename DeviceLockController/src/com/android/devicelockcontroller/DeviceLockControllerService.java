@@ -16,6 +16,11 @@
 
 package com.android.devicelockcontroller;
 
+import static com.android.devicelockcontroller.policy.DeviceStateController.DeviceEvent.CLEAR;
+import static com.android.devicelockcontroller.policy.DeviceStateController.DeviceEvent.LOCK_DEVICE;
+import static com.android.devicelockcontroller.policy.DeviceStateController.DeviceEvent.UNLOCK_DEVICE;
+import static com.android.devicelockcontroller.policy.DeviceStateController.DeviceState.PSEUDO_LOCKED;
+
 import android.app.Service;
 import android.content.Intent;
 import android.os.Bundle;
@@ -24,10 +29,10 @@ import android.os.RemoteCallback;
 
 import androidx.annotation.NonNull;
 
+import com.android.devicelockcontroller.policy.DevicePolicyController;
 import com.android.devicelockcontroller.policy.DeviceStateController;
 import com.android.devicelockcontroller.policy.PolicyObjectsInterface;
-import com.android.devicelockcontroller.policy.StateTransitionException;
-import com.android.devicelockcontroller.storage.GlobalParameters;
+import com.android.devicelockcontroller.storage.GlobalParametersClient;
 import com.android.devicelockcontroller.util.LogUtil;
 
 import com.google.common.util.concurrent.FutureCallback;
@@ -40,34 +45,32 @@ import com.google.common.util.concurrent.MoreExecutors;
  */
 public final class DeviceLockControllerService extends Service {
     private static final String TAG = "DeviceLockControllerService";
+    private DevicePolicyController mPolicyController;
     private DeviceStateController mStateController;
 
     private final IDeviceLockControllerService.Stub mBinder =
             new IDeviceLockControllerService.Stub() {
                 @Override
                 public void lockDevice(RemoteCallback remoteCallback) {
-                    try {
-                        Futures.addCallback(mStateController.setNextStateForEvent(
-                                        DeviceStateController.DeviceEvent.LOCK_DEVICE),
-                                remoteCallbackWrapper(remoteCallback, KEY_LOCK_DEVICE_RESULT),
-                                MoreExecutors.directExecutor());
-                    } catch (StateTransitionException e) {
-                        sendResult(KEY_LOCK_DEVICE_RESULT, remoteCallback, false);
-                    }
-
+                    Futures.addCallback(
+                            Futures.transformAsync(
+                                    mStateController.setNextStateForEvent(LOCK_DEVICE),
+                                    (Void unused) -> mStateController.getState() == PSEUDO_LOCKED
+                                            ? Futures.immediateFuture(true)
+                                            : mPolicyController.launchActivityInLockedMode(),
+                                    DeviceLockControllerService.this.getMainExecutor()),
+                            remoteCallbackWrapper(remoteCallback, KEY_LOCK_DEVICE_RESULT),
+                            MoreExecutors.directExecutor());
                 }
 
                 @Override
                 public void unlockDevice(RemoteCallback remoteCallback) {
-                    try {
-                        Futures.addCallback(mStateController.setNextStateForEvent(
-                                        DeviceStateController.DeviceEvent.UNLOCK_DEVICE),
-                                remoteCallbackWrapper(remoteCallback, KEY_UNLOCK_DEVICE_RESULT),
-                                MoreExecutors.directExecutor());
-
-                    } catch (StateTransitionException e) {
-                        sendResult(KEY_UNLOCK_DEVICE_RESULT, remoteCallback, false);
-                    }
+                    Futures.addCallback(
+                            Futures.transform(
+                                    mStateController.setNextStateForEvent(UNLOCK_DEVICE),
+                                    (Void unused) -> true, MoreExecutors.directExecutor()),
+                            remoteCallbackWrapper(remoteCallback, KEY_UNLOCK_DEVICE_RESULT),
+                            MoreExecutors.directExecutor());
 
                 }
 
@@ -80,53 +83,47 @@ public final class DeviceLockControllerService extends Service {
 
                 @Override
                 public void getDeviceIdentifier(RemoteCallback remoteCallback) {
-                    final Bundle bundle = new Bundle();
-                    final String deviceId = GlobalParameters.getRegisteredDeviceId(
-                            DeviceLockControllerService.this);
-                    // The deviceId should NOT be null because this method is only supposed to be
-                    // called AFTER the provision, which will store the deviceId on the device.
-                    // But the unexpected case of a null deviceId should be handled in DeviceLock
-                    // service, in
-                    // packages/modules/DeviceLock/service/java/com/android/server/devicelock.
-                    bundle.putString(IDeviceLockControllerService.KEY_HARDWARE_ID_RESULT, deviceId);
-                    remoteCallback.sendResult(bundle);
+                    Futures.addCallback(
+                            GlobalParametersClient.getInstance().getRegisteredDeviceId(),
+                            remoteCallbackWrapper(remoteCallback, KEY_HARDWARE_ID_RESULT),
+                            MoreExecutors.directExecutor());
                 }
 
                 @Override
                 public void clearDevice(RemoteCallback remoteCallback) {
-                    try {
-                        Futures.addCallback(mStateController.setNextStateForEvent(
-                                        DeviceStateController.DeviceEvent.CLEAR),
-                                remoteCallbackWrapper(remoteCallback, KEY_CLEAR_DEVICE_RESULT),
-                                MoreExecutors.directExecutor());
-
-                    } catch (StateTransitionException e) {
-                        sendResult(KEY_CLEAR_DEVICE_RESULT, remoteCallback, false);
-                    }
+                    Futures.addCallback(
+                            Futures.transform(mStateController.setNextStateForEvent(CLEAR),
+                                    (Void unused) -> true, MoreExecutors.directExecutor()),
+                            remoteCallbackWrapper(remoteCallback, KEY_CLEAR_DEVICE_RESULT),
+                            MoreExecutors.directExecutor());
 
                 }
             };
 
     @NonNull
-    private static FutureCallback<Void> remoteCallbackWrapper(RemoteCallback remoteCallback,
+    private static FutureCallback<Object> remoteCallbackWrapper(RemoteCallback remoteCallback,
             final String key) {
         return new FutureCallback<>() {
             @Override
-            public void onSuccess(Void result) {
-                sendResult(key, remoteCallback, true);
+            public void onSuccess(Object result) {
+                sendResult(key, remoteCallback, result);
             }
 
             @Override
             public void onFailure(Throwable t) {
-                LogUtil.e(TAG, "Failed to lock device", t);
-                sendResult(key, remoteCallback, false);
+                LogUtil.e(TAG, "Failed to perform the request", t);
+                sendResult(key, remoteCallback, null);
             }
         };
     }
 
-    private static void sendResult(String key, RemoteCallback remoteCallback, boolean result) {
+    private static void sendResult(String key, RemoteCallback remoteCallback, Object result) {
         final Bundle bundle = new Bundle();
-        bundle.putBoolean(key, result);
+        if (result instanceof Boolean) {
+            bundle.putBoolean(key, (Boolean) result);
+        } else if (result instanceof String) {
+            bundle.putString(key, (String) result);
+        }
         remoteCallback.sendResult(bundle);
     }
 
@@ -136,6 +133,7 @@ public final class DeviceLockControllerService extends Service {
 
         final PolicyObjectsInterface policyObjects = (PolicyObjectsInterface) getApplication();
         mStateController = policyObjects.getStateController();
+        mPolicyController = policyObjects.getPolicyController();
     }
 
     @Override
