@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-package com.android.devicelockcontroller.policy;
+package com.android.devicelockcontroller.storage;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
 /**
- * Downloader which handles download request. It provides a {@link ListenableFuture} when a download
- * request is enqueued.
+ * Interface for SetupParametersClient.
  */
-public interface Downloader {
+public interface SetupParametersClientInterface {
     /**
-     * Start download request.
+     * Get the name of the package implementing the kiosk app.
      *
-     * @return true, if the request succeeds, false if not.
+     * @return kiosk app package name.
      */
-    ListenableFuture<Boolean> startDownload();
-
-    /** Returns the file path the downloader will download to. */
-    String getFileLocation();
+    ListenableFuture<String> getKioskPackage();
 }
