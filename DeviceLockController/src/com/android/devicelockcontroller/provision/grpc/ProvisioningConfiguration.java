@@ -25,6 +25,8 @@ import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_PACKAGE;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_SETUP_ACTIVITY;
 import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_KIOSK_SIGNATURE_CHECKSUM;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_SUPPORT_URL;
+import static com.android.devicelockcontroller.common.DeviceLockConstants.EXTRA_TERMS_AND_CONDITIONS_URL;
 
 import android.os.Bundle;
 
@@ -62,12 +64,20 @@ public final class ProvisioningConfiguration {
     // provisioned.
     private final boolean mDisallowInstallingFromUnknownSources;
 
+    // The URL to the Terms and Conditions of the partner for enrolling in a
+    // Device Lock program.
+    private final String mTermsAndConditionsUrl;
+
+    // The URL to the support page the user can use to get help.
+    private final String mSupportUrl;
+
     public ProvisioningConfiguration(
             String kioskAppDownloadUrl, String kioskAppProviderName,
             String kioskAppPackageName, String kioskAppSignatureChecksum,
             String kioskAppMainActivity, List<String> kioskAppAllowlistPackages,
             boolean kioskAppEnableOutgoingCalls, boolean kioskAppEnableEnableNotifications,
-            boolean disallowInstallingFromUnknownSources) {
+            boolean disallowInstallingFromUnknownSources, String termsAndConditionsUrl,
+            String supportUrl) {
         mKioskAppDownloadUrl = kioskAppDownloadUrl;
         mKioskAppProviderName = kioskAppProviderName;
         mKioskAppPackageName = kioskAppPackageName;
@@ -77,6 +87,8 @@ public final class ProvisioningConfiguration {
         mKioskAppEnableOutgoingCalls = kioskAppEnableOutgoingCalls;
         mKioskAppEnableEnableNotifications = kioskAppEnableEnableNotifications;
         mDisallowInstallingFromUnknownSources = disallowInstallingFromUnknownSources;
+        mTermsAndConditionsUrl = termsAndConditionsUrl;
+        mSupportUrl = supportUrl;
     }
 
     /**
@@ -96,6 +108,8 @@ public final class ProvisioningConfiguration {
         bundle.putString(EXTRA_KIOSK_APP_PROVIDER_NAME, mKioskAppProviderName);
         bundle.putBoolean(EXTRA_DISALLOW_INSTALLING_FROM_UNKNOWN_SOURCES,
                 mDisallowInstallingFromUnknownSources);
+        bundle.putString(EXTRA_TERMS_AND_CONDITIONS_URL, mTermsAndConditionsUrl);
+        bundle.putString(EXTRA_SUPPORT_URL, mSupportUrl);
         return bundle;
     }
 }
